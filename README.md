@@ -1,4 +1,4 @@
-# OPN-exjobb
+# OPN-masterthesis
 ## Table of Contents
 
 1. Introduction
@@ -8,12 +8,12 @@
 1. Testing
 
 ## Introduction
-This repository is part of my master thesis project _"Temporal order prediction of video frames in intelligent machine applications using self-supervised machine learning methods"_ at Uppsala University. The model is based on the OPN from the paper "Unsupervised Representation Learning by Sorting Sequence" (Lee, Huang, Singh & Yang, 2017).
+This repository is part of my master thesis project _"Temporal order prediction of video frames in intelligent machine applications using self-supervised machine learning methods"_ at Uppsala University and in collaboration with Volvo Cars. The model is based on the OPN from the paper "Unsupervised Representation Learning by Sorting Sequence" (Lee, Huang, Singh & Yang, 2017).
 
 The original code, based on the Caffe framework, can be found here: [https://github.com/HsinYingLee/OPN/tree/master](url)
    
 ## Requirements & Dependencies
-Requirements for PyTorch, Azure Blob Storage and a few other libraries noted in the "Importing" section
+Requirements for PyTorch, Azure Blob Storage and a few other libraries noted in the "Importing" section. Python 3.10.13 was used. 
 
 ## Models and Training Data
 ### Training Data
@@ -23,7 +23,7 @@ Requirements for PyTorch, Azure Blob Storage and a few other libraries noted in 
 _final model to be posted here_
 
 ## Training
-Since the data is loaded from Azure Blob Storage, running the code and training the model should be pretty much plug-and-play.
+Since the data is loaded from Azure Blob Storage, automatically running the code and training the model should be pretty much plug-and-play.
 
 ## Testing
 _more details to be added_
