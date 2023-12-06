@@ -1,4 +1,6 @@
-import PreparedDataset from data.py
+from azure.storage.blob import BlobServiceClient, ContainerClient, BlobPrefix
+from data.py import BlobSamples, PreparedDataset, PreprocessedTemporalFourData
+from data.py import test_video_dataset, test_temporal_four, visualize_frames, visualize_optical_flow
 
 def main():
     STORAGEACCOUNTURL = "https://exjobbssl1863219591.blob.core.windows.net"
@@ -10,7 +12,7 @@ def main():
     blob_service_client_instance = BlobServiceClient(
         account_url=STORAGEACCOUNTURL, credential=STORAGEACCOUNTKEY)
 
-    container_client_instance = blob_service_client_instance.get_container_client(CONTAINERNAME)
+    #container_client_instance = blob_service_client_instance.get_container_client(CONTAINERNAME)
 
     # Usage:
     sample = BlobSamples()
