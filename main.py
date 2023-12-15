@@ -1,6 +1,3 @@
-from azure.storage.blob import BlobServiceClient, ContainerClient, BlobPrefix
-from data import BlobSamples, PreparedDataset, PreprocessedTemporalFourData
-from data import test_video_dataset, test_temporal_four, visualize_frames, visualize_optical_flow
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
@@ -8,14 +5,25 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import MultiStepLR
 from model import CustomOPN
+from preprocessed_temporal_four_data_class import PreprocessedTemporalFourData
+from prepared_dataset_class import PreparedDataset
 import time
 
-def main():
-    print("loading temporal four dataset")
-    dataset_train = torch.load('dataset_train.pth')
-    train_model(dataset_train)
+#temporary imports
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
 
-def train_model(dataset_train):
+## DEFINE GLOBAL VARIABLES
+epoch_amount = 10 ##TODO make it 17000
+
+def main():
+    print("Loading temporal four dataset")
+    train_dataset = torch.load('dataset_train.pth')
+    #test_dataset = torch.load('dataset_test.pth')
+    train_model(train_dataset)
+
+def train_model(train_dataset):
     #Initialize the model
     model = CustomOPN()
     criterion = nn.CrossEntropyLoss()
@@ -25,28 +33,26 @@ def train_model(dataset_train):
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20], gamma=0.1) #TODO make it milestones=[130000, 170000]
 
     # Create data loaders
-    train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=32, shuffle=True, num_workers=3)#)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=3)#)
     # TODO potentially replace with starmap? Or simply forego Jupyter Notebook altogether?
 
     print(f'Number of batches in train_loader: {len(train_loader)}')
 
     # Assuming validation_data is your validation dataset
     #validation_loader = torch.utils.data.DataLoader(validation_data, batch_size=32, shuffle=False) TODO add validation data
+    print('Starting Training')
 
-    # Training loop
-    epoch_amount = 10
-
-    for epoch in range(epoch_amount): # max_iter, TODO make it 17000
+    for epoch in range(epoch_amount):
         # Training phase
-        print('Starting Training')
+        
         model.train()
         running_loss = 0.0
         running_corrects = 0
 
         start_time = time.time()
-        for inputs, frame_order_labels, action_labels, _, _, _ in train_loader:
+        for inputs, frame_order_labels, *rest in train_loader:
             end_time = time.time()
-            print(f'Time taken to retrieve elements: {end_time - start_time} seconds') # EXTREMELY SLOW +27 sec
+            print(f'Time taken to retrieve elements: {end_time - start_time} seconds') # Expected: ~40 seconds
             # Convert inputs to float
             inputs = inputs.to(torch.float32)
 
@@ -85,7 +91,7 @@ def train_model(dataset_train):
         epoch_loss = running_loss / len(train_loader.dataset)
         epoch_acc = running_corrects.double() / len(train_loader.dataset)
 
-        print(f'Epoch {epoch}/{epoch_amount-1}, Loss: {epoch_loss}, Accuracy: {epoch_acc}')
+        print(f'Epoch {epoch+1}/{epoch_amount}, Loss: {epoch_loss}, Accuracy: {epoch_acc}')
         
         # Every 10000 iterations, save a snapshot of the model
         #if epoch % 10000 == 0:
@@ -114,7 +120,7 @@ def create_validation_dataset():
     #TODO
     pass
 
-def evaluate_model():
+def evaluate_model(test_dataset):
     # Load the trained model
     model_path = f'model_epoch_{epoch_amount-1}.pt'  # replace with your model path
     model = CustomOPN()
@@ -122,7 +128,6 @@ def evaluate_model():
     model.eval()
 
     # Create a DataLoader for the test data
-    test_dataset = PreprocessedTemporalFourData(video_dataset, trainval='test')
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=False)
 
     # Initialize the running accuracy
