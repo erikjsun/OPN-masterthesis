@@ -96,7 +96,7 @@ def train_model(train_dataset):
         # Every 10000 iterations, save a snapshot of the model
         #if epoch % 10000 == 0:
         # At the end of each epoch, save the model's weights
-        torch.save(model.state_dict(), f'model_epoch_{epoch}.pt')
+        #torch.save(model.state_dict(), f'model_epoch_{epoch}.pt')
 
         # TODO add validation phase to possibly fine-tune the model's parameters.
         # Validation phase
