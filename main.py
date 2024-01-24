@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 ## DEFINE GLOBAL VARIABLES
-epoch_amount = 50 ##TODO make it 17000
+epoch_amount = 100 ##TODO make it 17000
 
 def main():
     print("Loading temporal four dataset")

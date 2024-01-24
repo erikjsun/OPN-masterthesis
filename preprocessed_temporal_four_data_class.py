@@ -7,7 +7,7 @@ import random
 from PIL import Image
 
 class PreprocessedTemporalFourData(Dataset):
-    def __init__(self, dataset, trainval='train', pixel_mean = 96.5, patch_size=80):
+    def __init__(self, dataset, trainval='train', pixel_mean = 96.5, patch_size=160):
         self.dataset = dataset
         self.trainval = trainval
         self.pixel_mean = pixel_mean
@@ -32,21 +32,26 @@ class PreprocessedTemporalFourData(Dataset):
         #end_time = time.time()
         #print(f'Time taken for retrieving flows: {end_time - start_time} seconds')
                 
-        # Select the frames from the video based on the weights of the optical flow
+        # Select the four frames from the video based on the weights of the optical flow – random order
         indices = np.random.choice(frames.shape[0], size=4, replace=False, p=weights)
         selected_frames = frames[indices]
-
         # Normalize the indices to their respective order
-        order_indices = indices.argsort().argsort()
+        ranked_indices = indices.argsort().argsort()
+        
+        #saving the ordered frames for visualization
+        ordered_indices = np.sort(indices)
+        ordered_frames = frames[ordered_indices]
 
         # Create label list for the frame order
-        frame_order_label, frames_canonical_order = self.get_frame_order_label(order_indices)
+        frame_order_label, frames_canonical_order = self.get_frame_order_label(ranked_indices)
 
         # Applying random mirroring to all selected frames at once
         mirror = random.randint(0,1)
         if mirror == 1:
             selected_frames_list = [np.array(Image.fromarray(frame.astype('uint8')).transpose(Image.FLIP_LEFT_RIGHT)) for frame in selected_frames]
             selected_frames = np.array(selected_frames_list)
+            ordered_frames_list = [np.array(Image.fromarray(frame.astype('uint8')).transpose(Image.FLIP_LEFT_RIGHT)) for frame in ordered_frames]
+            ordered_frames = np.array(ordered_frames_list)
 
         # Select the best patch from the frames
         best_patch = self.select_best_patch(selected_frames)
@@ -59,7 +64,7 @@ class PreprocessedTemporalFourData(Dataset):
         flows = torch.tensor(np.array(flows))
         indices = torch.tensor(indices)
         #print("Shape of preprocessed_frames:", preprocessed_frames.shape)
-        return preprocessed_frames, frame_order_label, action_label, video_name, frames_canonical_order, selected_frames, preprocessed_frames_coordinates
+        return preprocessed_frames, frame_order_label, action_label, video_name, frames_canonical_order, selected_frames, preprocessed_frames_coordinates, ordered_frames
 
     def get_video_data(self, index):
         if self.trainval == 'train':
