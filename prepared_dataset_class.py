@@ -1,3 +1,4 @@
+#saving class to transfer to main.py
 from torch.utils.data import Dataset
 
 class PreparedDataset(Dataset):

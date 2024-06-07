@@ -1,3 +1,4 @@
+#saving class to transfer to main.py
 import torch
 from torch.utils.data import Dataset
 import numpy as np
@@ -27,14 +28,12 @@ class PreprocessedTemporalFourData(Dataset):
         frames = frames[::2]
         
         # Compute the optical flow weights for frame selection
-        #start_time = time.time()
         weights, flows = self.compute_optical_flow_weights(frames)
-        #end_time = time.time()
-        #print(f'Time taken for retrieving flows: {end_time - start_time} seconds')
-                
+        
         # Select the four frames from the video based on the weights of the optical flow – random order
         indices = np.random.choice(frames.shape[0], size=4, replace=False, p=weights)
         selected_frames = frames[indices]
+
         # Normalize the indices to their respective order
         ranked_indices = indices.argsort().argsort()
         

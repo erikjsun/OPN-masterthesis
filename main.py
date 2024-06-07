@@ -12,11 +12,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 ## DEFINE GLOBAL VARIABLES
-epoch_amount = 100 ##TODO make it 17000
+epoch_amount = 50 ##TODO make it 17000
 
 def main():
     print("Loading temporal four dataset")
     train_dataset = torch.load('dataset_train.pth')
+    #print(len(train_dataset))
+    item = train_dataset[0]
+    item = train_dataset[0]
+    preprocessed_frames, frame_order_label, action_label, video_name, frames_canonical_order, selected_frames, preprocessed_frames_coordinates, ordered_frames = item  # Unpack the tuple
+    #print(preprocessed_frames.shape)
+    #show_dataset_images(train_dataset)
     #test_dataset = torch.load('dataset_test.pth')
     model, loss_history, accuracy_history = train_model(train_dataset)
     plot_loss_and_accuracy(loss_history, accuracy_history)
@@ -27,7 +33,7 @@ def train_model(train_dataset):
     criterion = nn.CrossEntropyLoss()
 
     #Setting optimizer and scheduler
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0005)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, momentum=0.9, weight_decay=0.0005)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20], gamma=0.1) #TODO make it milestones=[130000, 170000]
 
     # Create data loaders
@@ -66,6 +72,7 @@ def train_model(train_dataset):
 
             # Forward pass
             #start_time = time.time()
+            #print(inputs.shape)
             outputs = model(inputs)
             #end_time = time.time()
             #print(f'Time taken for forward pass: {end_time - start_time} seconds') #EXTREMELY FAST
@@ -192,5 +199,28 @@ def visualize_network():
     # Display the graph
     dot.view()
 
+import matplotlib.pyplot as plt
+import torchvision.transforms.functional as TF
+
+def show_dataset_images(dataset, num_images=5):
+    fig, axs = plt.subplots(1, num_images, figsize=(15, 3))
+    for i in range(num_images):
+        # Assuming each item in dataset gives a batch of images
+        img_tensor = dataset[i][0]  # This needs to be the tensor containing the image data
+
+        # Check the number of dimensions and rearrange if necessary
+        if img_tensor.ndim == 4 and img_tensor.shape[-1] in {1, 3}:
+            img_tensor = img_tensor.permute(0, 3, 1, 2)  # Rearrange from NHWC to NCHW if needed
+            img_tensor = img_tensor[0]  # Take the first image of the batch
+
+        # Handle single channel images (grayscale)
+        if img_tensor.shape[0] == 1:
+            img_tensor = img_tensor.squeeze(0)  # Remove channel dimension if it's grayscale
+
+        img = TF.to_pil_image(img_tensor)
+        axs[i].imshow(img, cmap='gray' if img_tensor.shape[0] == 1 else None)
+        axs[i].axis('off')
+    plt.show()
+    
 if __name__ == '__main__':
     main()
