@@ -23,7 +23,9 @@ Requirements for PyTorch, Azure Blob Storage and a few other libraries noted in 
 _final model to be posted here_
 
 ## Training
-Since the data is loaded from Azure Blob Storage, automatically running the code and training the model should be pretty much plug-and-play.
+Since the data is loaded from Azure Blob Storage, automatically running the code and training the model should be pretty much plug-and-play. The order of execution is:
+1. _data_prep.ipynb_ to set up the data
+2. _main.py_ to run the training
 
 ## Testing
 _more details to be added_
