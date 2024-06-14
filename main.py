@@ -10,17 +10,18 @@ from prepared_dataset_class import PreparedDataset
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+from albumentations import Compose, Rotate
+from albumentations.pytorch import ToTensorV2
 
 ## DEFINE GLOBAL VARIABLES
-epoch_amount = 50 ##TODO make it 17000
+epoch_amount = 200 ##TODO make it 17000
 
 def main():
     print("Loading temporal four dataset")
     train_dataset = torch.load('dataset_train.pth')
     #print(len(train_dataset))
-    item = train_dataset[0]
-    item = train_dataset[0]
-    preprocessed_frames, frame_order_label, action_label, video_name, frames_canonical_order, selected_frames, preprocessed_frames_coordinates, ordered_frames = item  # Unpack the tuple
+    #item = train_dataset[0]
+    #preprocessed_frames, frame_order_label, action_label, video_name, frames_canonical_order, selected_frames, preprocessed_frames_coordinates, ordered_frames = item  # Unpack the tuple
     #print(preprocessed_frames.shape)
     #show_dataset_images(train_dataset)
     #test_dataset = torch.load('dataset_test.pth')
@@ -33,11 +34,27 @@ def train_model(train_dataset):
     criterion = nn.CrossEntropyLoss()
 
     #Setting optimizer and scheduler
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, momentum=0.9, weight_decay=0.0005)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.0003, momentum=0.9, weight_decay=0.0005)
+    #optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, betas=(0.9, 0.999), weight_decay=0.0005)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20], gamma=0.1) #TODO make it milestones=[130000, 170000]
 
-    # Create data loaders
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=3)
+    # Define the transformation
+    transform = Compose([
+        Rotate(limit=30, p=1.0),
+        ToTensorV2()
+    ])
+
+    # Before augmentation
+    #show_dataset_images(train_dataset)
+
+    # Create an augmented dataset
+    #augmented_train_dataset = AugmentedDataset(train_dataset, transform)
+    
+    # After augmentation
+    #show_dataset_images(augmented_train_dataset)
+
+      # Create data loaders
+    train_loader = torch.utils.data.DataLoader(augmented_train_dataset, batch_size=32, shuffle=True, num_workers=3)
 
     print(f'Number of batches in train_loader: {len(train_loader)}')
 
@@ -221,6 +238,20 @@ def show_dataset_images(dataset, num_images=5):
         axs[i].imshow(img, cmap='gray' if img_tensor.shape[0] == 1 else None)
         axs[i].axis('off')
     plt.show()
+
+class AugmentedDataset(Dataset):
+    def __init__(self, original_dataset, transform):
+        self.original_dataset = original_dataset
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.original_dataset)
+
+    def __getitem__(self, idx):
+        item = self.original_dataset[idx]
+        preprocessed_frames, frame_order_label, action_label, video_name, frames_canonical_order, selected_frames, preprocessed_frames_coordinates, ordered_frames = item
+        augmented_frames = torch.stack([self.transform(image=frame.numpy())['image'] for frame in preprocessed_frames])
+        return augmented_frames, frame_order_label, action_label, video_name, frames_canonical_order, selected_frames, preprocessed_frames_coordinates, ordered_frames
     
 if __name__ == '__main__':
     main()
