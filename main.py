@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import random_split
 
 ## DEFINE GLOBAL VARIABLES
-epoch_amount = 5 ##TODO make it 17000
+epoch_amount = 100 ##TODO make it 17000
 
 def main():
     # Load configuration
@@ -130,41 +130,47 @@ def plot_loss_and_accuracy(train_loss_history, train_accuracy_history, val_loss_
     # After training, plot loss and accuracy
     epochs = range(1, epoch_amount + 1)
 
-    # PLOTTING LOSS
-    plt.subplot(1, 2, 1)
-    plt.plot(epochs, train_loss_history, label='Training Loss')
-    plt.plot(epochs, val_loss_history, label='Validation Loss')
+    plt.figure(figsize=(12, 12))
     
+    # Plotting Training Loss
+    plt.subplot(2, 2, 1)
+    plt.plot(epochs, train_loss_history, label='Training Loss')
     # Training Loss Trend Line
     m_train_loss, b_train_loss = np.polyfit(epochs, train_loss_history, 1)
-    plt.plot(epochs, m_train_loss*np.array(epochs) + b_train_loss, label='Train Loss Trend Line')
-
-    # Validation Loss Trend Line
-    m_val_loss, b_val_loss = np.polyfit(epochs, val_loss_history, 1)
-    plt.plot(epochs, m_val_loss*np.array(epochs) + b_val_loss, label='Val Loss Trend Line')
-    
+    plt.plot(epochs, m_train_loss*np.array(epochs) + b_train_loss, 'r--', label='Train Loss Trend Line')
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.legend()
 
-    # PLOTTING ACCURACY
-    plt.subplot(1, 2, 2)
+    # Plotting Training Accuracy
+    plt.subplot(2, 2, 2)
     plt.plot(epochs, train_accuracy_history, label='Training Accuracy')
-    plt.plot(epochs, val_accuracy_history, label='Validation Accuracy')
-    
     # Training Accuracy Trend Line
     m_train_acc, b_train_acc = np.polyfit(epochs, train_accuracy_history, 1)
-    plt.plot(epochs, m_train_acc*np.array(epochs) + b_train_acc, label='Train Acc Trend Line')
-
-    # Validation Accuracy Trend Line
-    m_val_acc, b_val_acc = np.polyfit(epochs, val_accuracy_history, 1)
-    plt.plot(epochs, m_val_acc*np.array(epochs) + b_val_acc, label='Val Acc Trend Line')
-    
+    plt.plot(epochs, m_train_acc*np.array(epochs) + b_train_acc, 'r--', label='Train Acc Trend Line')
     plt.xlabel('Epochs')
     plt.ylabel('Accuracy')
     plt.legend()
 
-    plt.show()
+    # Plotting Validation Loss
+    plt.subplot(2, 2, 3)
+    plt.plot(epochs, val_loss_history, label='Validation Loss')
+    # Validation Loss Trend Line
+    m_val_loss, b_val_loss = np.polyfit(epochs, val_loss_history, 1)
+    plt.plot(epochs, m_val_loss*np.array(epochs) + b_val_loss, 'r--', label='Val Loss Trend Line')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+
+    # Plotting Validation Accuracy
+    plt.subplot(2, 2, 4)
+    plt.plot(epochs, val_accuracy_history, label='Validation Accuracy')
+    # Validation Accuracy Trend Line
+    m_val_acc, b_val_acc = np.polyfit(epochs, val_accuracy_history, 1)
+    plt.plot(epochs, m_val_acc*np.array(epochs) + b_val_acc, 'r--', label='Val Acc Trend Line')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.legend()
 
     # Calculate and print the correlation coefficients
     corr_train_loss = np.corrcoef(epochs, train_loss_history)[0, 1]
@@ -176,12 +182,10 @@ def plot_loss_and_accuracy(train_loss_history, train_accuracy_history, val_loss_
     print(f'Training Accuracy correlation coefficient: {corr_train_acc:.2f}')
     print(f'Validation Accuracy correlation coefficient: {corr_val_acc:.2f}') 
 
-    # Save the plot
+    # Save the plot before showing
     plt.savefig(plot_save_path)
 
-def create_validation_dataset():
-    #TODO
-    pass
+    plt.show()
 
 def evaluate_model(test_dataset):
     # Load the trained model
