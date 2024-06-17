@@ -1,0 +1,5 @@
+{
+    "dataset_train_path": "dataset_train.pth",
+    "model_save_path": "C:/Users/Ecko_/OneDrive/Documents/Exjobb/Saved plots and weights/model_weights.pth",
+    "plot_save_path": "C:/Users/Ecko_/OneDrive/Documents/Exjobb/Saved plots and weights/plot.png"
+}

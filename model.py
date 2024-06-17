@@ -34,7 +34,7 @@ class CustomOPN(nn.Module):
         self.fc6 = nn.Linear(256 * 3 * 3, 1024)  # Assuming the input size from conv2d is (256, 3, 3)
         self.bn6 = nn.BatchNorm1d(1024)
         self.relu6 = nn.ReLU(inplace=True)
-        #self.drop6 = nn.Dropout(0.5)
+        self.drop6 = nn.Dropout(0.5)
 
         # The fc7 layers process the pairwise features
         self.fc7_layers = nn.ModuleList()
@@ -43,7 +43,7 @@ class CustomOPN(nn.Module):
                 nn.Linear(512, 512),
                 nn.BatchNorm1d(512),
                 nn.ReLU(inplace=True),
-                #nn.Dropout(0.5)
+                nn.Dropout(0.5)
             ))
 
         # 3. ORDER PREDICTION:

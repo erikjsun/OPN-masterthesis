@@ -1,3 +1,5 @@
+import os
+import json
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
@@ -10,145 +12,172 @@ from prepared_dataset_class import PreparedDataset
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-from albumentations import Compose, Rotate
-from albumentations.pytorch import ToTensorV2
+from torch.utils.data import random_split
 
 ## DEFINE GLOBAL VARIABLES
-epoch_amount = 200 ##TODO make it 17000
+epoch_amount = 5 ##TODO make it 17000
 
 def main():
-    print("Loading temporal four dataset")
-    train_dataset = torch.load('dataset_train.pth')
-    #print(len(train_dataset))
-    #item = train_dataset[0]
-    #preprocessed_frames, frame_order_label, action_label, video_name, frames_canonical_order, selected_frames, preprocessed_frames_coordinates, ordered_frames = item  # Unpack the tuple
-    #print(preprocessed_frames.shape)
-    #show_dataset_images(train_dataset)
-    #test_dataset = torch.load('dataset_test.pth')
-    model, loss_history, accuracy_history = train_model(train_dataset)
-    plot_loss_and_accuracy(loss_history, accuracy_history)
+    # Load configuration
+    with open('config.json', 'r') as config_file:
+        config = json.load(config_file)
 
-def train_model(train_dataset):
+    # Access paths from configuration
+    dataset_train_path = config['dataset_train_path']
+    model_save_path = config['model_save_path']
+    plot_save_path = config['plot_save_path']
+
+    print("Loading temporal four dataset")
+    dataset = torch.load(dataset_train_path)
+
+    # Split the dataset into training and validation sets
+    train_size = int(0.8 * len(dataset))
+    val_size = len(dataset) - train_size
+    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+
+    model, train_loss_history, train_accuracy_history, val_loss_history, val_accuracy_history  = train_model(train_dataset, val_dataset, model_save_path)
+    plot_loss_and_accuracy(train_loss_history, train_accuracy_history, val_loss_history, val_accuracy_history, plot_save_path)
+
+def train_model(train_dataset, val_dataset, model_save_path):
     #Initialize the model
     model = CustomOPN()
     criterion = nn.CrossEntropyLoss()
 
     #Setting optimizer and scheduler
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.0003, momentum=0.9, weight_decay=0.0005)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0005)
     #optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, betas=(0.9, 0.999), weight_decay=0.0005)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20], gamma=0.1) #TODO make it milestones=[130000, 170000]
 
-    # Define the transformation
-    transform = Compose([
-        Rotate(limit=30, p=1.0),
-        ToTensorV2()
-    ])
-
-    # Before augmentation
-    #show_dataset_images(train_dataset)
-
-    # Create an augmented dataset
-    #augmented_train_dataset = AugmentedDataset(train_dataset, transform)
-    
-    # After augmentation
-    #show_dataset_images(augmented_train_dataset)
-
-      # Create data loaders
-    train_loader = torch.utils.data.DataLoader(augmented_train_dataset, batch_size=32, shuffle=True, num_workers=3)
+    # Create data loaders
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=3)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=3)
 
     print(f'Number of batches in train_loader: {len(train_loader)}')
-
-    # Assuming validation_data is your validation dataset
-    #validation_loader = torch.utils.data.DataLoader(validation_data, batch_size=32, shuffle=False) TODO add validation data
     
     # Initialize lists to store loss and accuracy at each epoch
-    loss_history = []
-    accuracy_history = []
+    train_loss_history = []
+    train_accuracy_history = []
+    val_loss_history = []
+    val_accuracy_history = []
 
     print('Starting Training')
     for epoch in range(epoch_amount):
-        # Training phase
+        train_loss, train_acc = train_one_epoch(model, criterion, optimizer, train_loader)
+        val_loss, val_acc = validate_model(model, criterion, val_loader)
+
+        train_loss_history.append(train_loss)
+        train_accuracy_history.append(train_acc)
+        val_loss_history.append(val_loss)
+        val_accuracy_history.append(val_acc)
+
+        print(f'Epoch {epoch+1}/{epoch_amount}, Train Loss: {train_loss:.4f}, Train Accuracy: {train_acc:.4f}, Val Loss: {val_loss:.4f}, Val Accuracy: {val_acc:.4f}')
+        # TODO Every X (e.g. 100) iterations, save a snapshot of the model
+        # if epoch % 100 == 0:
+        #     torch.save(model.state_dict(), f'model_epoch_{epoch}.pt')
+        scheduler.step()
+    
+    torch.save(model.state_dict(), model_save_path)
+    return model, train_loss_history, train_accuracy_history, val_loss_history, val_accuracy_history
+
+def train_one_epoch(model, criterion, optimizer, train_loader):
+    model.train()
+    running_loss = 0.0
+    running_corrects = 0
+
+    for inputs, frame_order_labels, *rest in train_loader:
+        inputs = inputs.to(torch.float32)  # Convert inputs to float
+        inputs = inputs.permute(0, 1, 4, 2, 3)  # Change the order of dimensions to (batch_size, frames, channels, height, width)
+        inputs = inputs.contiguous().view(-1, inputs.shape[1]*inputs.shape[2], inputs.shape[3], inputs.shape[4])  # Concatenate frames and channels
         
-        model.train()
-        running_loss = 0.0
-        running_corrects = 0
+        optimizer.zero_grad()
+        outputs = model(inputs)
+        _, predicted_labels = torch.max(outputs, 1)
+        loss = criterion(outputs, frame_order_labels)
 
-        #start_time = time.time()
-        for inputs, frame_order_labels, *rest in train_loader:
-            #end_time = time.time()
-            #print(f'Time taken to retrieve elements: {end_time - start_time} seconds') # Expected: ~40 seconds
-            # Convert inputs to float
-            inputs = inputs.to(torch.float32)
+        loss.backward()
+        optimizer.step()
 
-            #TODO check if this is correct
+        running_loss += loss.item() * inputs.size(0)
+        running_corrects += torch.sum(predicted_labels == frame_order_labels.data)
+
+    epoch_loss = running_loss / len(train_loader.dataset)
+    epoch_acc = running_corrects.double() / len(train_loader.dataset)
+    return epoch_loss, epoch_acc
+
+def validate_model(model, criterion, val_loader):
+    model.eval()
+    running_loss = 0.0
+    running_corrects = 0
+
+    with torch.no_grad():
+        for inputs, frame_order_labels, *rest in val_loader:
+            inputs = inputs.to(torch.float32) # Convert inputs to float
             inputs = inputs.permute(0, 1, 4, 2, 3)  # Change the order of dimensions to (batch_size, frames, channels, height, width)
             inputs = inputs.contiguous().view(-1, inputs.shape[1]*inputs.shape[2], inputs.shape[3], inputs.shape[4])  # Concatenate frames and channels
 
-            # Zero the parameter gradients
-            optimizer.zero_grad()
-
-            # Forward pass
-            #start_time = time.time()
-            #print(inputs.shape)
             outputs = model(inputs)
-            #end_time = time.time()
-            #print(f'Time taken for forward pass: {end_time - start_time} seconds') #EXTREMELY FAST
-
-            # Get predicted class labels
             _, predicted_labels = torch.max(outputs, 1)
-            #print("Predicted labels: ", predicted_labels)
-                    
-            # Calculate loss
             loss = criterion(outputs, frame_order_labels)
 
-            # Backward pass and optimize
-            #start_time = time.time()
-            loss.backward()
-            #end_time = time.time()
-            #print(f'Time taken for backward pass: {end_time - start_time} seconds') #EXTREMELY FAST
-            optimizer.step()
-
-            # Statistics
             running_loss += loss.item() * inputs.size(0)
             running_corrects += torch.sum(predicted_labels == frame_order_labels.data)
 
-        epoch_loss = running_loss / len(train_loader.dataset)
-        epoch_acc = running_corrects.double() / len(train_loader.dataset)
-        loss_history.append(epoch_loss)
-        accuracy_history.append(epoch_acc)
+    epoch_loss = running_loss / len(val_loader.dataset)
+    epoch_acc = running_corrects.double() / len(val_loader.dataset)
+    return epoch_loss, epoch_acc
 
-        print(f'Epoch {epoch+1}/{epoch_amount}, Loss: {epoch_loss}, Accuracy: {epoch_acc}')
-        
-        # TODO Every X (e.g. 100) iterations, save a snapshot of the model
-        #if epoch % 100 == 0:
-            #torch.save(model.state_dict(), f'model_epoch_{epoch}.pt')
-        scheduler.step()
-    return model, loss_history, accuracy_history
-
-def plot_loss_and_accuracy(loss_history, accuracy_history):
+def plot_loss_and_accuracy(train_loss_history, train_accuracy_history, val_loss_history, val_accuracy_history, plot_save_path):
     # After training, plot loss and accuracy
     epochs = range(1, epoch_amount + 1)
 
-    plt.figure(figsize=(12, 4))
+    # PLOTTING LOSS
     plt.subplot(1, 2, 1)
-    plt.plot(epochs, loss_history, label='Training Loss')
+    plt.plot(epochs, train_loss_history, label='Training Loss')
+    plt.plot(epochs, val_loss_history, label='Validation Loss')
+    
+    # Training Loss Trend Line
+    m_train_loss, b_train_loss = np.polyfit(epochs, train_loss_history, 1)
+    plt.plot(epochs, m_train_loss*np.array(epochs) + b_train_loss, label='Train Loss Trend Line')
+
+    # Validation Loss Trend Line
+    m_val_loss, b_val_loss = np.polyfit(epochs, val_loss_history, 1)
+    plt.plot(epochs, m_val_loss*np.array(epochs) + b_val_loss, label='Val Loss Trend Line')
+    
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.legend()
 
+    # PLOTTING ACCURACY
     plt.subplot(1, 2, 2)
-    plt.plot(epochs, accuracy_history, label='Training Accuracy')
+    plt.plot(epochs, train_accuracy_history, label='Training Accuracy')
+    plt.plot(epochs, val_accuracy_history, label='Validation Accuracy')
+    
+    # Training Accuracy Trend Line
+    m_train_acc, b_train_acc = np.polyfit(epochs, train_accuracy_history, 1)
+    plt.plot(epochs, m_train_acc*np.array(epochs) + b_train_acc, label='Train Acc Trend Line')
+
+    # Validation Accuracy Trend Line
+    m_val_acc, b_val_acc = np.polyfit(epochs, val_accuracy_history, 1)
+    plt.plot(epochs, m_val_acc*np.array(epochs) + b_val_acc, label='Val Acc Trend Line')
+    
     plt.xlabel('Epochs')
     plt.ylabel('Accuracy')
     plt.legend()
 
     plt.show()
 
-    # Plot correlation lines
-    plt.figure(figsize=(12, 4))
-    plt.subplot(1, 2, 1)
-    plt.plot(epochs, loss_history, label='Training Loss')
-    m, b = np.polyfit(epochs, loss_history, 1)
+    # Calculate and print the correlation coefficients
+    corr_train_loss = np.corrcoef(epochs, train_loss_history)[0, 1]
+    corr_val_loss = np.corrcoef(epochs, val_loss_history)[0, 1]
+    corr_train_acc = np.corrcoef(epochs, train_accuracy_history)[0, 1]
+    corr_val_acc = np.corrcoef(epochs, val_accuracy_history)[0, 1]
+    print(f'Training Loss correlation coefficient: {corr_train_loss:.2f}')
+    print(f'Validation Loss correlation coefficient: {corr_val_loss:.2f}')
+    print(f'Training Accuracy correlation coefficient: {corr_train_acc:.2f}')
+    print(f'Validation Accuracy correlation coefficient: {corr_val_acc:.2f}') 
+
+    # Save the plot
+    plt.savefig(plot_save_path)
 
 def create_validation_dataset():
     #TODO
@@ -239,19 +268,5 @@ def show_dataset_images(dataset, num_images=5):
         axs[i].axis('off')
     plt.show()
 
-class AugmentedDataset(Dataset):
-    def __init__(self, original_dataset, transform):
-        self.original_dataset = original_dataset
-        self.transform = transform
-
-    def __len__(self):
-        return len(self.original_dataset)
-
-    def __getitem__(self, idx):
-        item = self.original_dataset[idx]
-        preprocessed_frames, frame_order_label, action_label, video_name, frames_canonical_order, selected_frames, preprocessed_frames_coordinates, ordered_frames = item
-        augmented_frames = torch.stack([self.transform(image=frame.numpy())['image'] for frame in preprocessed_frames])
-        return augmented_frames, frame_order_label, action_label, video_name, frames_canonical_order, selected_frames, preprocessed_frames_coordinates, ordered_frames
-    
 if __name__ == '__main__':
     main()
