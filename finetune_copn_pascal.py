@@ -92,7 +92,7 @@ transform = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
-train_dataset = datasets.VOCDetection(root='data/VOCdevkit', year='2007', image_set='trainval', transform=transform)
+train_dataset = datasets.VOCDetection(root='data/VOCdevkit', year='2007', image_set='trainval', transform=transform, download=True)
 val_dataset = datasets.VOCDetection(root='data/VOCdevkit', year='2007', image_set='val', transform=transform)
 
 train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=3)

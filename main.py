@@ -44,15 +44,15 @@ def train_model(train_dataset, val_dataset, model_save_path):
     criterion = nn.CrossEntropyLoss()
 
     #Setting optimizer and scheduler
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0005)
-    #optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, betas=(0.9, 0.999), weight_decay=0.0005)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=0.0003, momentum=0.9, weight_decay=0.0005)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, betas=(0.9, 0.999), weight_decay=0.0005)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20], gamma=0.1) #TODO make it milestones=[130000, 170000]
 
     # Create data loaders
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=3)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=3)
 
-    print(f'Number of batches in train_loader: {len(train_loader)}')
+    print(f'Number of batches in train_ loader: {len(train_loader)}')
     
     # Initialize lists to store loss and accuracy at each epoch
     train_loss_history = []
