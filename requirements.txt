@@ -1,0 +1,11 @@
+azure-storage-blob
+numpy
+torch
+torchvision
+torchviz
+matplotlib
+opencv-python
+imageio
+ipykernel
+jupyter
+notebook
