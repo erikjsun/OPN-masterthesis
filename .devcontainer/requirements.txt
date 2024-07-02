@@ -1,0 +1,12 @@
+azure-storage-blob==12.19.0
+numpy==1.26.1
+torch==2.1.1
+torchvision==0.16.1
+torchviz==0.0.2
+matplotlib==3.8.1
+opencv-python==4.8.1.78
+imageio==2.32.0
+imageio[ffmpeg]==0.5.1
+ipykernel==6.29.5
+jupyter==1.0.0
+notebook==7.2.1

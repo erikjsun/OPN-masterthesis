@@ -1,0 +1,8 @@
+{
+    "python.pythonPath": "/usr/bin/python3.10",
+    "jupyter.jupyterServerType": "local",
+    "jupyter.defaultKernel": {
+      "language": "python",
+      "name": "python3"
+    }
+  }

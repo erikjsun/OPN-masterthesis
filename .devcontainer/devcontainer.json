@@ -1,0 +1,20 @@
+{
+  "name": "COPN Master Thesis Container",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "customizations": {
+      "vscode": {
+          "settings": {
+              "terminal.integrated.shell.linux": "/bin/bash"
+          },
+          "extensions": [
+              "ms-python.python",
+              "ms-toolsai.jupyter",
+              "ms-azuretools.vscode-docker"
+          ]
+      }
+  },
+  "forwardPorts": [8000],
+  "remoteUser": "vscode"
+}
