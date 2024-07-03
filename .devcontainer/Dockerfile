@@ -29,5 +29,8 @@ COPY --chown=vscode:vscode requirements.txt /app/requirements.txt
 # Install Python dependencies
 RUN python -m pip install --upgrade pip && python -m pip install -r /app/requirements.txt
 
+# Install imageio-ffmpeg separately to avoid conflicts
+RUN python -m pip install imageio-ffmpeg==0.4.8
+
 # Copy the rest of the application code
 COPY --chown=vscode:vscode . /app
