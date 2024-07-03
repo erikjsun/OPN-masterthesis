@@ -13,9 +13,18 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 from torch.utils.data import random_split
+import psutil
 
 ## DEFINE GLOBAL VARIABLES
 epoch_amount = 100 ##TODO make it 17000
+batch_size = 32
+num_workers = 0
+
+def print_memory_usage(stage):
+    memory = psutil.virtual_memory()
+    print(f"[{stage}] Total Memory: {memory.total / (1024 ** 3):.2f} GB")
+    print(f"[{stage}] Available Memory: {memory.available / (1024 ** 3):.2f} GB")
+    print(f"[{stage}] Memory Usage: {memory.percent}%")
 
 def main():
     # Load configuration
@@ -49,8 +58,8 @@ def train_model(train_dataset, val_dataset, model_save_path):
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20], gamma=0.1) #TODO make it milestones=[130000, 170000]
 
     # Create data loaders
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=3)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=3)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
     print(f'Number of batches in train_ loader: {len(train_loader)}')
     
@@ -61,9 +70,20 @@ def train_model(train_dataset, val_dataset, model_save_path):
     val_accuracy_history = []
 
     print('Starting Training')
+
+    total_time = 0
+
     for epoch in range(epoch_amount):
+        #print_memory_usage(f"Before Epoch {epoch + 1}")
+        # Measure training time for 1 epoch
+        epoch_start_time = time.time()
         train_loss, train_acc = train_one_epoch(model, criterion, optimizer, train_loader)
         val_loss, val_acc = validate_model(model, criterion, val_loader)
+        epoch_end_time = time.time()
+        epoch_time = epoch_end_time - epoch_start_time
+        total_time += epoch_time
+        print(f"Time for 1 epoch: {epoch_time:.2f} seconds")
+        #print_memory_usage(f"After Epoch {epoch + 1}")
 
         train_loss_history.append(train_loss)
         train_accuracy_history.append(train_acc)
@@ -75,6 +95,10 @@ def train_model(train_dataset, val_dataset, model_save_path):
         # if epoch % 100 == 0:
         #     torch.save(model.state_dict(), f'model_epoch_{epoch}.pt')
         scheduler.step()
+
+        # Print total time for every 10 epochs
+        if (epoch + 1) % 10 == 0:
+            print(f"Total time for {epoch + 1} epochs: {total_time:.2f} seconds")
     
     torch.save(model.state_dict(), model_save_path)
     return model, train_loss_history, train_accuracy_history, val_loss_history, val_accuracy_history
