@@ -1,9 +1,9 @@
 #saving class to transfer to main.py
-import torch
 from torch.utils.data import Dataset
-import numpy as np
 import imageio.v3 as iio
 import cv2
+import numpy as np
+import torch
 import random
 from PIL import Image
 

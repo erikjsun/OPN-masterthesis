@@ -16,9 +16,9 @@ from torch.utils.data import random_split
 import psutil
 
 ## DEFINE GLOBAL VARIABLES
-epoch_amount = 100 ##TODO make it 17000
+epoch_amount = 2 ##TODO make it 17000
 batch_size = 32
-num_workers = 0
+num_workers = 2
 
 def print_memory_usage(stage):
     memory = psutil.virtual_memory()
