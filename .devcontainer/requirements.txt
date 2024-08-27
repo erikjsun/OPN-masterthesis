@@ -10,3 +10,4 @@ imageio-ffmpeg==0.4.8  # Compatible version with imageio 2.32.0
 ipykernel==6.29.5
 jupyter==1.0.0
 notebook==7.2.1
+scikit-learn==1.2.2
