@@ -170,8 +170,8 @@ def fine_tune_model(config_path):
             loss = criterion(outputs, targets)
             loss.backward()
             optimizer.step()
-            if i % 10 == 0:
-                print(f'Epoch [{epoch}], Step [{i}/{len(train_loader)}], Loss: {loss.item():.4f}')
+            #if i % 10 == 0:
+            #    print(f'Epoch [{epoch}], Step [{i}/{len(train_loader)}], Loss: {loss.item():.4f}')
 
     # Evaluation function
     def evaluate(model, val_loader):
