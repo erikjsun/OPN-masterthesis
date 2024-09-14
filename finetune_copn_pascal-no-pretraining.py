@@ -151,7 +151,7 @@ def train(model, train_loader, criterion, optimizer, epoch):
     
     # Calculate Average Precision (AP) for training set
     train_mAP = compute_mAP(all_outputs, all_targets)
-    print(f'Epoch [{epoch}] Training mAP: {train_mAP:.4f}')
+    #print(f'Epoch [{epoch}] Training mAP: {train_mAP:.4f}')
     return train_mAP
 
 # Evaluation Function
@@ -167,7 +167,7 @@ def evaluate(model, val_loader):
     
     # Calculate mAP for validation set
     val_mAP = compute_mAP(all_outputs, all_targets)
-    print(f'Validation mAP: {val_mAP:.4f}')
+    #print(f'Validation mAP: {val_mAP:.4f}')
     return val_mAP
 
 def compute_mAP(outputs, targets):
@@ -215,11 +215,12 @@ def plot_metrics(train_mAPs, val_mAPs):
     plt.title('Training and Validation mAP over Epochs')
     plt.legend()
     plt.grid(True)
-    plt.savefig('mAP_plot.png')  # Save the plot to a file
+    plt.savefig('./saved/mAP_plot.png')  # Save the plot to a file
     plt.close()  # Close the plot to free up memory
 
 if __name__ == '__main__':
     # Training Loop
+    print("Beginning finetuning and evaluation with no pretraining!")
     num_epochs = 3
     train_mAPs = []
     val_mAPs = []

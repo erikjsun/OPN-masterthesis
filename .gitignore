@@ -2,4 +2,4 @@ data/VOCdevkit/*
 __pycache__/model.cpython-310.pyc
 __pycache__/prepared_dataset_class.cpython-310.pyc
 __pycache__/preprocessed_temporal_four_data_class.cpython-310.pyc
-_mAP_plot.png
+mAP_plot.png
