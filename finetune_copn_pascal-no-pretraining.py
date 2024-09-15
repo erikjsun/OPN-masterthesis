@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 from sklearn.metrics import average_precision_score
 import matplotlib.pyplot as plt
+import json
 
 # Define PASCAL VOC classes and mapping to indices
 VOC_CLASSES = [
@@ -205,8 +206,18 @@ def compute_mAP(outputs, targets):
     mAP = np.mean(average_precisions)
     return mAP
 
+# Save mAP data
+def save_map_data(train_mAPs, val_mAPs, path='./saved/map_data.json'):
+    data = {
+        'train_mAPs': train_mAPs,
+        'val_mAPs': val_mAPs
+    }
+    with open(path, 'w') as f:
+        json.dump(data, f)
+    print(f"mAP data saved to {path}")
+
 # Visualization function
-def plot_metrics(train_mAPs, val_mAPs):
+def save_plot_metrics(train_mAPs, val_mAPs):
     plt.figure(figsize=(10, 5))
     plt.plot(train_mAPs, label='Training mAP', marker='o')
     plt.plot(val_mAPs, label='Validation mAP', marker='o')
@@ -220,8 +231,8 @@ def plot_metrics(train_mAPs, val_mAPs):
 
 if __name__ == '__main__':
     # Training Loop
-    print("Beginning finetuning and evaluation with no pretraining!")
-    num_epochs = 3
+    print("Beginning finetuning and evaluation with no pretraining")
+    num_epochs = 1
     train_mAPs = []
     val_mAPs = []
 
@@ -234,10 +245,9 @@ if __name__ == '__main__':
         train_mAPs.append(train_mAP)
         val_mAPs.append(val_mAP)
 
-    # Mock data for train_mAPs and val_mAPs
-    #train_mAPs = [0.0865, 0.1125, 0.1300, 0.1450, 0.1600]
-    #val_mAPs = [0.1212, 0.1481, 0.1550, 0.1600, 0.1650]
+    # Save the mAP data to a JSON file
+    save_map_data(train_mAPs, val_mAPs, path='./saved/map_data_no_pretraining.json')
     # Plotting the results
-    plot_metrics(train_mAPs, val_mAPs)
+    save_plot_metrics(train_mAPs, val_mAPs)
 
     print("Training completed!")

@@ -16,7 +16,7 @@ from torch.utils.data import random_split
 import psutil
 
 ## DEFINE GLOBAL VARIABLES
-epoch_amount = 2 ##TODO make it 17000
+epoch_amount = 100 ##TODO make it 17000
 batch_size = 32
 num_workers = 2
 
@@ -42,10 +42,13 @@ def main():
     val_size = len(dataset) - train_size
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
-    model, train_loss_history, train_accuracy_history, val_loss_history, val_accuracy_history  = train_model(train_dataset, val_dataset, model_save_path)
+    # Define a save interval (e.g., save every 100 epochs)
+    save_interval = 10
+
+    model, train_loss_history, train_accuracy_history, val_loss_history, val_accuracy_history  = train_model(train_dataset, val_dataset, model_save_path, save_interval)
     plot_loss_and_accuracy(train_loss_history, train_accuracy_history, val_loss_history, val_accuracy_history, plot_save_path)
 
-def train_model(train_dataset, val_dataset, model_save_path):
+def train_model(train_dataset, val_dataset, model_save_path, save_interval):
     #Initialize the model
     model = CustomOPN()
     criterion = nn.CrossEntropyLoss()
@@ -71,6 +74,10 @@ def train_model(train_dataset, val_dataset, model_save_path):
 
     total_time = 0
 
+    # Create 'modelsnapshots' subfolder in 'saved'
+    snapshot_dir = os.path.join('saved', 'modelsnapshots')
+    os.makedirs(snapshot_dir, exist_ok=True)
+
     for epoch in range(epoch_amount):
         #print_memory_usage(f"Before Epoch {epoch + 1}")
         # Measure training time for 1 epoch
@@ -89,16 +96,20 @@ def train_model(train_dataset, val_dataset, model_save_path):
         val_accuracy_history.append(val_acc)
 
         print(f'Epoch {epoch+1}/{epoch_amount}, Train Loss: {train_loss:.4f}, Train Accuracy: {train_acc:.4f}, Val Loss: {val_loss:.4f}, Val Accuracy: {val_acc:.4f}')
-        # TODO Every X (e.g. 100) iterations, save a snapshot of the model
-        # if epoch % 100 == 0:
-        #     torch.save(model.state_dict(), f'model_epoch_{epoch}.pt')
+        # Save model snapshot every save_interval epochs
+        if (epoch + 1) % save_interval == 0:
+            snapshot_path = os.path.join(snapshot_dir, f'model_epoch_{epoch + 1}.pt')
+            torch.save(model.state_dict(), snapshot_path)
+            print(f"Model saved at {snapshot_path}")
         scheduler.step()
 
         # Print total time for every 10 epochs
         if (epoch + 1) % 10 == 0:
             print(f"Total time for {epoch + 1} epochs: {total_time:.2f} seconds")
     
+    # Save final model
     torch.save(model.state_dict(), model_save_path)
+    print(f"Final model saved at {model_save_path}")
     return model, train_loss_history, train_accuracy_history, val_loss_history, val_accuracy_history
 
 def train_one_epoch(model, criterion, optimizer, train_loader):
