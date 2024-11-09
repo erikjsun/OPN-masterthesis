@@ -386,20 +386,18 @@ class PreprocessedTemporalFourData(Dataset):
 # Create and preprocess the dataset
 video_dataset = PreparedDataset(videos, trainval='train')
 temporal_four = PreprocessedTemporalFourData(video_dataset, trainval='train')
+#torch.save(temporal_four, 'dataset_train.pth')
 
-print('buffering')
 # Save the preprocessed data to Azure Blob Storage
 buffer = io.BytesIO()
-torch.save([temporal_four[i] for i in range(len(temporal_four))], buffer)
+torch.save(temporal_four, buffer)
 buffer.seek(0)
-print('buffered')
 
 # Upload to Blob Storage
 blob_client = blob_service_client_instance.get_blob_client(
     container=CONTAINERNAME,
     blob=f"{PREPROCESSEDDATA_FOLDERNAME}/ucf101_preprocessed_data.pth"
 )
-print('uploading')
 blob_client.upload_blob(buffer, overwrite=True)
 print("Uploaded preprocessed data to Azure Blob Storage.")
 

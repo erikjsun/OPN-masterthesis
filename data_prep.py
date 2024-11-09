@@ -1,3 +1,4 @@
+#DATA_PREP_OLD
 from azure.storage.blob import BlobServiceClient, ContainerClient, BlobPrefix
 import torch
 import numpy as np
@@ -17,7 +18,7 @@ STORAGEACCOUNTURL = "https://exjobbssl1863219591.blob.core.windows.net"
 STORAGEACCOUNTKEY = "PuL1QY8bQvIyGi653lr/9CPvyHLnip+cvsu62YAipDjB7onPDxfME156z5/O2NwY0PRLMTZc86/6+ASt5Vts8w=="
 CONTAINERNAME = "exjobbssl"
 FOLDERNAME = "UCF-101/HighJump/"  # Original data folder in blob storage
-PREPROCESSEDDATA_FOLDERNAME = "preprocessed-data"  # Folder to save preprocessed data
+PREPROCESSEDDATA_FOLDERNAME = "ucf-preprocessed-data"  # Folder to save preprocessed data
 
 # Initialize the BlobServiceClient
 blob_service_client_instance = BlobServiceClient(account_url=STORAGEACCOUNTURL, credential=STORAGEACCOUNTKEY)
@@ -380,7 +381,7 @@ def visualize_frames(input_frames, selected_frames, frames_canonical_order, vide
     plt.show()
 
 # Define your batch size
-BATCH_SIZE = 10  # Adjust based on your memory constraints
+BATCH_SIZE = 1000     # Adjust based on your memory constraints
 
 if __name__ == "__main__":
     sample = BlobSamples(single_folder_mode=False, specific_folder_name=FOLDERNAME)
@@ -418,7 +419,7 @@ if __name__ == "__main__":
             # Upload the batch to Blob Storage
             blob_client = blob_service_client_instance.get_blob_client(
                 container=CONTAINERNAME,
-                blob=f"{PREPROCESSEDDATA_FOLDERNAME}/batch_{batch_count}_preprocessed.pth"
+                blob=f"{PREPROCESSEDDATA_FOLDERNAME}/ucf101_preprocessed_batch_{batch_count}.pth"
             )
             blob_client.upload_blob(buffer, overwrite=True)
             print(f"Uploaded preprocessed data for batch {batch_count} to Azure Blob Storage.")
@@ -448,7 +449,7 @@ if __name__ == "__main__":
         # Upload the batch to Blob Storage
         blob_client = blob_service_client_instance.get_blob_client(
             container=CONTAINERNAME,
-            blob=f"{PREPROCESSEDDATA_FOLDERNAME}/batch_{batch_count}_preprocessed.pth"
+            blob=f"{PREPROCESSEDDATA_FOLDERNAME}/ucf_preprocessed_batch_{batch_count}.pth"
         )
         blob_client.upload_blob(buffer, overwrite=True)
         print(f"Uploaded preprocessed data for final batch {batch_count} to Azure Blob Storage.")

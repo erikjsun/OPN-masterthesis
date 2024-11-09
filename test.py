@@ -15,7 +15,7 @@ from data_prep_withblobsaving_nobatches import test_temporal_four, visualize_fra
 STORAGEACCOUNTURL = "https://exjobbssl1863219591.blob.core.windows.net"
 STORAGEACCOUNTKEY = "PuL1QY8bQvIyGi653lr/9CPvyHLnip+cvsu62YAipDjB7onPDxfME156z5/O2NwY0PRLMTZc86/6+ASt5Vts8w=="
 CONTAINERNAME = "exjobbssl"
-PREPROCESSEDDATA_FOLDERNAME = "preprocessed-data"
+PREPROCESSEDDATA_FOLDERNAME = "ucf-preprocessed-data"
 
 # Initialize Azure Blob Storage client
 blob_service_client = BlobServiceClient(account_url=STORAGEACCOUNTURL, credential=STORAGEACCOUNTKEY)
