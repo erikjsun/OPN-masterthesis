@@ -19,7 +19,6 @@ import psutil
 from azure.storage.blob import BlobServiceClient, ContainerClient
 import io
 import random
-from data_prep import test_temporal_four, visualize_frames  # Ensure this imports from your updated data prep code
 
 # Azure Blob Storage configuration
 STORAGEACCOUNTURL = "https://exjobbssl1863219591.blob.core.windows.net"
@@ -43,38 +42,38 @@ else:
 
 ## DEFINE GLOBAL VARIABLES
 epoch_amount = 5 ##TODO make it 17000
-batch_size = 32
+training_batch_size = 32
 num_workers = 2
 
 class BlobPreprocessedDataset(Dataset):
-    """
-    Loads preprocessed dataset from Blob Storage while preserving the original dataset's
-    dynamic processing methods. Critical to load the entire dataset object, not just the data,
-    to maintain on-the-fly augmentations and random frame ordering during training.
-    
-    Warning: Loading only data tuples without the processing methods will result in static samples
-    and unrealistic training performance.
-    """
     def __init__(self, blob_service_client, container_name, blob_names):
         self.blob_service_client = blob_service_client
         self.container_name = container_name
         self.blob_names = blob_names
-        # Load the actual dataset object
-        blob_client = self.blob_service_client.get_blob_client(
-            container=self.container_name, 
-            blob=self.blob_names[0]
-        )
-        downloaded_blob = blob_client.download_blob().readall()
-        buffer = io.BytesIO(downloaded_blob)
-        buffer.seek(0)
-        self.dataset = torch.load(buffer)
+        self.datasets = []
+        
+        # Load all batch files
+        for blob_name in blob_names:
+            blob_client = self.blob_service_client.get_blob_client(
+                container=self.container_name, 
+                blob=blob_name
+            )
+            downloaded_blob = blob_client.download_blob().readall()
+            buffer = io.BytesIO(downloaded_blob)
+            buffer.seek(0)
+            self.datasets.append(torch.load(buffer))
+            print(f"Loaded {blob_name}")
 
     def __len__(self):
-        return len(self.dataset)
+        return sum(len(dataset) for dataset in self.datasets)
 
     def __getitem__(self, idx):
-        # Use the original dataset's getitem method
-        return self.dataset[idx]
+        # Find which dataset contains this index
+        for dataset in self.datasets:
+            if idx < len(dataset):
+                return dataset[idx]
+            idx -= len(dataset)
+        raise IndexError("Index out of range")
 
 def main():
     # Load configuration
@@ -116,8 +115,8 @@ def train_model(train_dataset, val_dataset, model_save_path):
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20], gamma=0.1) #TODO make it milestones=[130000, 170000]
 
     # Create data loaders
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=training_batch_size, shuffle=True, num_workers=num_workers)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=training_batch_size, shuffle=False, num_workers=num_workers)
     print(f'Number of batches in train_ loader: {len(train_loader)}')
     
     # Initialize lists to store loss and accuracy at each epoch
@@ -275,7 +274,7 @@ def evaluate_model(test_dataset):
     model.eval()
 
     # Create a DataLoader for the test data
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=False)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=training_batch_size, shuffle=False)
 
     # Initialize the running accuracy
     running_corrects = 0
