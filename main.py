@@ -8,9 +8,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import MultiStepLR
 from model import CustomOPN
-from preprocessed_temporal_four_data_class import PreprocessedTemporalFourData
-from prepared_dataset_class import PreparedDataset
-#from data_prep import PreparedDataset, PreprocessedTemporalFourData
+from data_prep import PreparedDataset, PreprocessedTemporalFourData
 import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -24,7 +22,7 @@ import random
 STORAGEACCOUNTURL = "https://exjobbssl1863219591.blob.core.windows.net"
 STORAGEACCOUNTKEY = "PuL1QY8bQvIyGi653lr/9CPvyHLnip+cvsu62YAipDjB7onPDxfME156z5/O2NwY0PRLMTZc86/6+ASt5Vts8w=="
 CONTAINERNAME = "exjobbssl"
-PREPROCESSEDDATA_FOLDERNAME = "ucf-preprocessed-data"
+PREPROCESSEDDATA_FOLDERNAME = "ucf-preprocessed-data-1000"
 
 # Initialize the BlobServiceClient
 blob_service_client = BlobServiceClient(account_url=STORAGEACCOUNTURL, credential=STORAGEACCOUNTKEY)
@@ -38,7 +36,7 @@ blob_names = [blob.name for blob in blob_list if blob.name.endswith('.pth')]
 if not blob_names:
     print("No preprocessed data files found in the blob storage.")
 else:
-    print(f"Found {len(blob_names)} preprocessed files in Blob Storage.")
+    print(f"Found {len(blob_names)} preprocessed batches in Blob Storage.")
 
 ## DEFINE GLOBAL VARIABLES
 epoch_amount = 5 ##TODO make it 17000

@@ -13,14 +13,16 @@ from PIL import Image
 from torch.utils.data import Dataset
 import io
 import gc
+import traceback
 
 # 2. CONSTANTS
 STORAGEACCOUNTURL = "https://exjobbssl1863219591.blob.core.windows.net"
 STORAGEACCOUNTKEY = "PuL1QY8bQvIyGi653lr/9CPvyHLnip+cvsu62YAipDjB7onPDxfME156z5/O2NwY0PRLMTZc86/6+ASt5Vts8w=="
 CONTAINERNAME = "exjobbssl"
 FOLDERNAME = "UCF-101/HighJump/"
-PREPROCESSEDDATA_FOLDERNAME = "ucf-preprocessed-data"
-BATCH_SIZE = 1000     # Add batch size constant
+PREPROCESSEDDATA_FOLDERNAME = "ucf-preprocessed-data-1000"
+BATCH_SIZE = 1000
+DEFAULT_FOLDER_LIMIT = 101
 
 # 3. CLASSES
 class BlobSamples(object):
@@ -40,7 +42,8 @@ class BlobSamples(object):
                 self.list_blobs_hierarchical(container_client, blob.name, depth+1)
         return self.folders
 
-    def load_videos_generator(self, blob_service_client, container_name, videos_loaded, folder_limit):
+    def load_videos_generator(self, blob_service_client, container_name, videos_loaded=None, folder_limit=DEFAULT_FOLDER_LIMIT):
+        print("\nInitializing video generator...")
         container_client = blob_service_client.get_container_client(container_name)
         videos_counter = 0
         folder_count = 0
@@ -48,14 +51,24 @@ class BlobSamples(object):
         # Determine folders to load videos from
         if self.single_folder_mode:
             folder_names = [self.specific_folder_name]
+            print(f"\nSingle folder mode: loading from {self.specific_folder_name}")
         else:
             self.folders = []  # Clear previous entries if any
-            folder_names = self.list_blobs_hierarchical(container_client)[:folder_limit]
-
-        for folder_name in folder_names:
-            if folder_count >= folder_limit:
+            all_folders = self.list_blobs_hierarchical(container_client)
+            folder_names = all_folders[:folder_limit]  # Use the actual folder_limit parameter
+            total_folders = len(folder_names)  # Store total folders to process
+            print(f"\nFound {len(all_folders)} total folders in UCF-101")
+            print(f"Will process {total_folders} folders:")
+            for i, folder in enumerate(folder_names, 1):
+                print(f"{i}. {folder.replace('UCF-101/', '')}")
+        
+        for i, folder_name in enumerate(folder_names, 1):
+            folder_count += 1
+            if folder_count > folder_limit:
                 break
-            blob_list = container_client.list_blobs(name_starts_with=folder_name)
+            print(f"\nProcessing folder {i}/{total_folders}: {folder_name}")  # Use i and total_folders
+            blob_list = list(container_client.list_blobs(name_starts_with=folder_name))
+            print(f"Found {len(blob_list)} videos in folder")
 
             for blob in blob_list:
                 if videos_loaded is not None and videos_counter >= videos_loaded:
@@ -63,11 +76,12 @@ class BlobSamples(object):
                 blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob.name)
                 video_data = blob_client.download_blob().readall()
                 video = {'path': blob.name, 'data': video_data}
-                yield video  # Yield one video at a time
+                yield video
                 videos_counter += 1
+                print(f"\rProcessed video {videos_counter} in current folder", end="")
+            print("\n")  # Add extra newline after processing each folder
 
             self.loaded_folders.append(folder_name)
-            folder_count += 1
     
     def load_videos_into_memory(self, blob_service_client, container_name, videos_loaded, folder_limit):
         container_client = blob_service_client.get_container_client(container_name)
@@ -404,6 +418,14 @@ class PreprocessedTemporalFourData(Dataset):
         return frame
 
 # 4. HELPER FUNCTIONS
+def get_memory_usage():
+    import psutil
+    process = psutil.Process()
+    return process.memory_info().rss / 1024 / 1024  # Memory in MB
+
+def log_memory(message):
+    print(f"{message} - Memory usage: {get_memory_usage():.2f} MB")
+
 def test_temporal_four(temporal_four, n):
     input_frames, frame_order_label, action_label, video_name, frames_canonical_order, selected_frames, input_frames_coordinates, ordered_frames = temporal_four[2]
     print('testing')
@@ -491,64 +513,128 @@ def visualize_optical_flow(flows, indices):
     plt.tight_layout()
     plt.show()
 
-
 def process_batch(batch, batch_count, blob_service_client_instance):
-    video_dataset = PreparedDataset(batch, trainval='train')
-    temporal_four_dataset = PreprocessedTemporalFourData(video_dataset, trainval='train')
-    
-    buffer = io.BytesIO()
-    torch.save(temporal_four_dataset, buffer)
-    buffer.seek(0)
-    
-    blob_client = blob_service_client_instance.get_blob_client(
-        container=CONTAINERNAME,
-        blob=f"{PREPROCESSEDDATA_FOLDERNAME}/ucf101_preprocessed_batch_{batch_count}.pth"
-    )
-    blob_client.upload_blob(buffer, overwrite=True)
-    print(f"Uploaded batch {batch_count} ({len(batch)} videos) to Azure")
-    
-    del video_dataset, temporal_four_dataset, buffer
-    torch.cuda.empty_cache()
-    gc.collect()
+    try:
+        print(f"\nStarting batch {batch_count} processing...")
+        print(f"Batch size: {len(batch)} videos")
+        log_memory("Start of process_batch")
+        
+        # Create video dataset
+        print("Creating video dataset...")
+        video_dataset = PreparedDataset(batch, trainval='train')
+        log_memory("After creating PreparedDataset")
+        
+        # Create temporal dataset
+        print("Creating temporal dataset...")
+        temporal_four_dataset = PreprocessedTemporalFourData(video_dataset, trainval='train')
+        log_memory("After creating PreprocessedTemporalFourData")
+        
+        # Save to buffer
+        print("Saving to memory buffer...")
+        buffer = io.BytesIO()
+        log_memory("Before torch.save")
+        
+        torch.save(temporal_four_dataset, buffer, pickle_protocol=5)
+        log_memory("After torch.save")
+        buffer.seek(0)
+        
+        print("Uploading buffer to Azure...")
+        blob_client = blob_service_client_instance.get_blob_client(
+            container=CONTAINERNAME,
+            blob=f"{PREPROCESSEDDATA_FOLDERNAME}/ucf101_preprocessed_batch_{batch_count}.pth"
+        )
+        blob_client.upload_blob(buffer, overwrite=True)
+        
+        # Clean up
+        print("Cleaning up...")
+        del video_dataset
+        del temporal_four_dataset
+        del buffer
+        gc.collect()
+        torch.cuda.empty_cache()
+        
+        log_memory("End of process_batch")
+        
+        print(f"Completed batch {batch_count}")
+        return True
+        
+    except Exception as e:
+        print(f"\nError in batch {batch_count}: {str(e)}")
+        traceback.print_exc()  # Add this to see the full error trace
+        return False
 
 # 5. MAIN EXECUTION
 if __name__ == "__main__":
-    # Initialize blob service
-    blob_service_client_instance = BlobServiceClient(
-        account_url=STORAGEACCOUNTURL, credential=STORAGEACCOUNTKEY)
-    container_client_instance = blob_service_client_instance.get_container_client(CONTAINERNAME)
-
-    # Set up generator
-    sample = BlobSamples(single_folder_mode=False, specific_folder_name=FOLDERNAME)
-    print('Processing videos in batches')
-    
-    video_generator = sample.load_videos_generator(
-        blob_service_client_instance,
-        CONTAINERNAME,
-        videos_loaded=None,
-        folder_limit=1
-    )
-
-    # Process videos in batches
-    batch = []
-    batch_count = 0
-    video_count = 0
-
-    for video in video_generator:
-        batch.append(video)
-        video_count += 1
+    try:
+        print("Starting data preprocessing pipeline...")
+        log_memory("Initial memory usage")
         
-        if len(batch) == BATCH_SIZE:
-            batch_count += 1
-            process_batch(batch, batch_count, blob_service_client_instance)
-            batch = []
+        # Initialize blob service
+        print("Initializing Azure Blob Storage connection...")
+        blob_service_client_instance = BlobServiceClient(
+            account_url=STORAGEACCOUNTURL, credential=STORAGEACCOUNTKEY)
+        container_client_instance = blob_service_client_instance.get_container_client(CONTAINERNAME)
+        
+        # Option 2: For multiple folders (default)
+        sample = BlobSamples(single_folder_mode=False, specific_folder_name="")
+        
+        video_generator = sample.load_videos_generator(
+            blob_service_client_instance,
+            CONTAINERNAME,
+            videos_loaded=None,
+            folder_limit=DEFAULT_FOLDER_LIMIT
+        )
 
-    # Process remaining videos
-    if batch:
-        batch_count += 1
-        process_batch(batch, batch_count, blob_service_client_instance)
-
-    print(f"Total videos processed: {video_count}")
+        # Process videos in batches
+        print("\nStarting batch processing...")
+        batch = []
+        batch_count = 0
+        video_count = 0
+        failed_videos = []
+        
+        for video in video_generator:
+            try:
+                batch.append(video)
+                video_count += 1
+                
+                if len(batch) == BATCH_SIZE:
+                    batch_count += 1
+                    success = process_batch(batch, batch_count, blob_service_client_instance)
+                    if not success:
+                        print(f"Failed to process batch {batch_count}")
+                        # Store failed videos for retry
+                        failed_videos.extend(batch)
+                    batch = []
+                    log_memory(f"After processing batch {batch_count}")
+                    
+            except Exception as e:
+                print(f"\nError processing video {video_count}: {str(e)}")
+                failed_videos.append(video)
+                continue
+        
+        # Process remaining videos
+        if batch:
+            try:
+                batch_count += 1
+                success = process_batch(batch, batch_count, blob_service_client_instance)
+                if not success:
+                    failed_videos.extend(batch)
+            except Exception as e:
+                print(f"\nError processing final batch: {str(e)}")
+                failed_videos.extend(batch)
+        
+        # Report results
+        print("\nPreprocessing complete!")
+        print(f"Total videos processed: {video_count}")
+        print(f"Total batches created: {batch_count}")
+        print(f"Failed videos: {len(failed_videos)}")
+        
+        log_memory("Final memory usage")
+        
+    except Exception as e:
+        print(f"\nCritical error in main process: {str(e)}")
+    finally:
+        print("\nProcess finished.")
 
     #amount_of_videos_to_load = 6
     #test_temporal_four(temporal_four, amount_of_videos_to_load)
