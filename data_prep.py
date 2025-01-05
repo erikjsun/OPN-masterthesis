@@ -20,8 +20,8 @@ STORAGEACCOUNTURL = "https://exjobbssl1863219591.blob.core.windows.net"
 STORAGEACCOUNTKEY = "PuL1QY8bQvIyGi653lr/9CPvyHLnip+cvsu62YAipDjB7onPDxfME156z5/O2NwY0PRLMTZc86/6+ASt5Vts8w=="
 CONTAINERNAME = "exjobbssl"
 FOLDERNAME = "UCF-101/HighJump/"
-PREPROCESSEDDATA_FOLDERNAME = "ucf-preprocessed-data-1000"
-BATCH_SIZE = 1000
+PREPROCESSEDDATA_FOLDERNAME = "ucf-preprocessed-data-100"
+BATCH_SIZE = 500
 DEFAULT_FOLDER_LIMIT = 101
 
 # 3. CLASSES
@@ -513,54 +513,80 @@ def visualize_optical_flow(flows, indices):
     plt.tight_layout()
     plt.show()
 
-def process_batch(batch, batch_count, blob_service_client_instance):
+def process_batch_fully_extracted(batch, batch_count, blob_service_client_instance):
+    """
+    Processes a batch of raw videos, creates a PreprocessedTemporalFourData-like logic,
+    and then saves the final 4-frame items (8-tuple) into a flat list.
+    """
     try:
-        print(f"\nStarting batch {batch_count} processing...")
-        print(f"Batch size: {len(batch)} videos")
-        log_memory("Start of process_batch")
-        
-        # Create video dataset
-        print("Creating video dataset...")
-        video_dataset = PreparedDataset(batch, trainval='train')
-        log_memory("After creating PreparedDataset")
-        
-        # Create temporal dataset
-        print("Creating temporal dataset...")
-        temporal_four_dataset = PreprocessedTemporalFourData(video_dataset, trainval='train')
-        log_memory("After creating PreprocessedTemporalFourData")
-        
-        # Save to buffer
-        print("Saving to memory buffer...")
+        print(f"\n[FullyExtracted] Starting batch {batch_count} processing...")
+        print(f"[FullyExtracted] Batch size: {len(batch)} videos")
+
+        # 1) Create the "video dataset" just like before
+        video_dataset = PreparedDataset(batch, trainval='train')  
+        #   This splits videos into train/test, but if you only want to store “trainval=’train’” data
+        #   that’s fine. Or do it for both if you prefer.
+
+        # 2) Create "temporal dataset" that implements all the random logic
+        temporal_four_dataset = PreprocessedTemporalFourData(
+            dataset=video_dataset, trainval='train'
+        )
+
+        # 3) Now we will call __getitem__ on each index to get the final 8-tuple
+        print("[FullyExtracted] Extracting final 4-frame samples from the entire dataset...")
+        final_samples = []
+        dataset_length = len(temporal_four_dataset)
+        print(f"[FullyExtracted] dataset_length = {dataset_length}")
+
+        for idx in range(dataset_length):
+            try:
+                sample_8 = temporal_four_dataset[idx]
+                # sample_8 is typically:
+                # (
+                #   preprocessed_frames,         # Tensor
+                #   frame_order_label,           # Tensor
+                #   action_label,                # Tensor
+                #   video_name,                  # str
+                #   frames_canonical_order,      # Tensor
+                #   selected_frames,             # ndarray
+                #   preprocessed_frames_coords,  # ...
+                #   ordered_frames               # ...
+                # )
+                final_samples.append(sample_8)
+
+            except Exception as e:
+                print(f"[FullyExtracted] Error extracting index={idx}: {str(e)}")
+                traceback.print_exc()
+                continue
+
+        print(f"[FullyExtracted] Collected {len(final_samples)} final samples.")
+
+        # 4) Save final_samples to memory buffer
         buffer = io.BytesIO()
-        log_memory("Before torch.save")
-        
-        torch.save(temporal_four_dataset, buffer, pickle_protocol=5)
-        log_memory("After torch.save")
+        torch.save(final_samples, buffer, pickle_protocol=5)
         buffer.seek(0)
-        
-        print("Uploading buffer to Azure...")
+
+        # 5) Upload buffer to Azure
         blob_client = blob_service_client_instance.get_blob_client(
             container=CONTAINERNAME,
-            blob=f"{PREPROCESSEDDATA_FOLDERNAME}/ucf101_preprocessed_batch_{batch_count}.pth"
+            blob=f"{PREPROCESSEDDATA_FOLDERNAME}/ucf101_preprocessed_fullyextracted_batch_{batch_count}.pth"
         )
         blob_client.upload_blob(buffer, overwrite=True)
-        
+
         # Clean up
-        print("Cleaning up...")
         del video_dataset
         del temporal_four_dataset
+        del final_samples
         del buffer
         gc.collect()
         torch.cuda.empty_cache()
-        
-        log_memory("End of process_batch")
-        
-        print(f"Completed batch {batch_count}")
+
+        print(f"[FullyExtracted] Completed batch {batch_count}")
         return True
-        
+
     except Exception as e:
-        print(f"\nError in batch {batch_count}: {str(e)}")
-        traceback.print_exc()  # Add this to see the full error trace
+        print(f"[FullyExtracted] Error in batch {batch_count}: {str(e)}")
+        traceback.print_exc()
         return False
 
 # 5. MAIN EXECUTION
@@ -599,7 +625,7 @@ if __name__ == "__main__":
                 
                 if len(batch) == BATCH_SIZE:
                     batch_count += 1
-                    success = process_batch(batch, batch_count, blob_service_client_instance)
+                    success = process_batch_fully_extracted(batch, batch_count, blob_service_client_instance)
                     if not success:
                         print(f"Failed to process batch {batch_count}")
                         # Store failed videos for retry
@@ -616,7 +642,7 @@ if __name__ == "__main__":
         if batch:
             try:
                 batch_count += 1
-                success = process_batch(batch, batch_count, blob_service_client_instance)
+                success = process_batch_fully_extracted(batch, batch_count, blob_service_client_instance)
                 if not success:
                     failed_videos.extend(batch)
             except Exception as e:
