@@ -1,6 +1,8 @@
 # MAIN.PY
 
+##################################################
 # 1. IMPORTS
+##################################################
 import os
 import json
 import torch
@@ -20,22 +22,35 @@ import gc
 import random
 from sklearn.model_selection import train_test_split
 import sys
+from dotenv import load_dotenv
 
+##################################################
 # 2. CUSTOM IMPORTS (LOCAL MODULES)
+##################################################
 from model import CustomOPN
 from data_prep import PreparedDataset, PreprocessedTemporalFourData
 
+##################################################
 # 3. GLOBAL CONFIG / CONSTANTS
-# Azure Blob Storage configuration
-STORAGEACCOUNTURL = "https://exjobbssl1863219591.blob.core.windows.net"
-STORAGEACCOUNTKEY = "PuL1QY8bQvIyGi653lr/9CPvyHLnip+cvsu62YAipDjB7onPDxfME156z5/O2NwY0PRLMTZc86/6+ASt5Vts8w=="
-CONTAINERNAME = "exjobbssl"
-PREPROCESSEDDATA_FOLDERNAME = "ucf-preprocessed-data-100"
+##################################################
+# Load environment variables
+load_dotenv()
 
-epoch_amount = 5  # For testing
-chunk_size = 4
-training_batch_size = 32
-num_workers = 1
+# Get Azure credentials from environment
+AZURE_STORAGE_URL = os.getenv('AZURE_STORAGE_URL')
+AZURE_STORAGE_KEY = os.getenv('AZURE_STORAGE_KEY')
+AZURE_CONTAINER_NAME = os.getenv('AZURE_CONTAINER_NAME')
+
+# Load configuration specific to main.py
+with open('config.json', 'r') as f:
+    config = json.load(f)['main']
+    PREPROCESSEDDATA_FOLDERNAME = config['paths']['preprocessed_folder']
+
+# Training parameters from config
+epoch_amount = config['training']['epochs']
+chunk_size = config['training']['chunk_size']
+training_batch_size = config['training']['batch_size']
+num_workers = config['training']['num_workers']
 
 ##################################################
 # 4. DATASET CLASS FOR FULLY EXTRACTED .PTH FILES
@@ -87,26 +102,29 @@ def chunkify(lst, chunk_size):
     for i in range(0, len(lst), chunk_size):
         yield lst[i : i + chunk_size]
 
-def train_one_chunk(model, criterion, optimizer, train_loader):
+def train_one_chunk(model, criterion, optimizer, train_loader, current_chunk, total_chunks):
     model.train()
     running_loss = 0.0
     running_corrects = 0
     total_samples = 0
+    total_batches = len(train_loader) 
 
     # Timer initialization
     batch_start_time = None
 
     for batch_idx, (inputs, frame_order_labels, *rest) in enumerate(train_loader):
         # Print timing from previous batch
-        if batch_start_time is not None:
-            batch_end_time = time.time()
-            batch_processing_time = batch_end_time - batch_start_time
-            print(f"Batch {batch_idx}/{len(train_loader)} processed in {batch_processing_time:.2f} seconds")
-        else:
-            print(f"Batch {batch_idx}/{len(train_loader)} processed (timing starts from next batch)")
+        #if batch_start_time is not None:
+        #    batch_end_time = time.time()
+        #    batch_processing_time = batch_end_time - batch_start_time
+            #print(f"    Batch {batch_idx}/{total_batches-1} in chunk {current_chunk}/{total_chunks} "
+                  #f"processed in {batch_processing_time:.2f} seconds")
+        #else:
+            #print(f"    Batch {batch_idx}/{total_batches-1} in chunk {current_chunk}/{total_chunks} "
+            #      f"started...")
 
         # Reset timer for the current batch
-        batch_start_time = time.time()
+        #batch_start_time = time.time()
 
         # Preprocessing: shape => (batch, 4, H, W, ???) => permute => (batch, 4, ???, H, W)
         # Then flatten frames+channels => (batch, 4*C, H, W)
@@ -125,8 +143,6 @@ def train_one_chunk(model, criterion, optimizer, train_loader):
         running_corrects += (preds == frame_order_labels).sum().item()
         total_samples += inputs.size(0)
 
-    print()  # newline
-
     chunk_loss = running_loss / total_samples
     chunk_acc  = running_corrects / total_samples
     return chunk_loss, running_corrects, total_samples
@@ -144,7 +160,7 @@ def validate_in_chunks(model, blob_service_client, val_blob_names, batch_size, c
         blob_chunk_start_time = time.time()
         # Create dataset with those .pth files
         val_dataset_blob_chunk = FullyExtractedBlobDataset(
-            blob_service_client, CONTAINERNAME, blob_chunk
+            blob_service_client, AZURE_CONTAINER_NAME, blob_chunk
         )
         val_loader = DataLoader(val_dataset_blob_chunk, batch_size=batch_size, shuffle=False)
         blob_chunk_end_time = time.time()
@@ -217,22 +233,25 @@ def train_model(model_save_path,
         train_files_shuffled = train_blob_names[:]
         random.shuffle(train_files_shuffled)
 
+        # Calculate total chunks
+        total_chunks = (len(train_files_shuffled) + chunk_size - 1) // chunk_size
+
         epoch_train_loss     = 0.0
         epoch_train_corrects = 0
         epoch_train_samples  = 0
 
-        # (B) chunkify the shuffled list
         for blob_chunk_idx, blob_chunk in enumerate(chunkify(train_files_shuffled, chunk_size), start=1):
-            print(f"  Loading train blob_chunk {blob_chunk_idx} with {len(blob_chunk)} file(s)...")
+            print(f"\nProcessing train chunk {blob_chunk_idx}/{total_chunks}")
+            print(f"  Loading {len(blob_chunk)} file(s)...")
 
             # measure loading time
             blob_chunk_load_start_time = time.time()
             train_dataset_blob_chunk = FullyExtractedBlobDataset(
-                blob_service_client, CONTAINERNAME, blob_chunk
+                blob_service_client, AZURE_CONTAINER_NAME, blob_chunk
             )
             blob_chunk_load_end_time   = time.time()
             blob_chunk_loading_time    = blob_chunk_load_end_time - blob_chunk_load_start_time
-            print(f"  train blob_chunk {blob_chunk_idx} loaded in {blob_chunk_loading_time:.2f} seconds")
+            print(f"  Chunk {blob_chunk_idx} loaded in {blob_chunk_loading_time:.2f} seconds")
 
             train_loader = DataLoader(
                 train_dataset_blob_chunk,
@@ -243,11 +262,16 @@ def train_model(model_save_path,
 
             blob_chunk_train_start_time = time.time()
             chunk_loss, chunk_corrects, chunk_samples = train_one_chunk(
-                model, criterion, optimizer, train_loader
+                model, 
+                criterion, 
+                optimizer, 
+                train_loader,
+                current_chunk=blob_chunk_idx,
+                total_chunks=total_chunks
             )
             blob_chunk_train_end_time = time.time()
             blob_chunk_train_time     = blob_chunk_train_end_time - blob_chunk_train_start_time
-            print(f"  train blob_chunk {blob_chunk_idx} processed in {blob_chunk_train_time:.2f} sec")
+            print(f"  Chunk {blob_chunk_idx}/{total_chunks} processing completed in {blob_chunk_train_time:.2f} sec")
 
             # accumulate
             epoch_train_loss     += chunk_loss * chunk_samples
@@ -281,22 +305,18 @@ def train_model(model_save_path,
     torch.save(model.state_dict(), model_save_path)
     return model, train_loss_history, train_acc_history, val_loss_history, val_acc_history
 
-
 ##################################################
 # 7. MAIN EXECUTION
 ##################################################
 def main():
     # 1) Load config
-    with open('config.json', 'r') as config_file:
-        config = json.load(config_file)
-
-    model_save_path = config['model_save_path']
-    plot_save_path  = config['plot_save_path']
+    model_save_path = config['paths']['model_save']
+    plot_save_path = config['paths']['plot_save']
 
     # 2) Connect to BlobService
-    blob_service_client = BlobServiceClient(account_url=STORAGEACCOUNTURL,
-                                            credential=STORAGEACCOUNTKEY)
-    container_client = blob_service_client.get_container_client(CONTAINERNAME)
+    blob_service_client = BlobServiceClient(account_url=AZURE_STORAGE_URL,
+                                            credential=AZURE_STORAGE_KEY)
+    container_client = blob_service_client.get_container_client(AZURE_CONTAINER_NAME)
 
     # 3) List .pth blobs
     blob_list = container_client.list_blobs(name_starts_with=PREPROCESSEDDATA_FOLDERNAME + '/')

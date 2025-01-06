@@ -1,5 +1,23 @@
 {
-    "dataset_train_path": "dataset_train.pth",
-    "model_save_path": "./saved/model_weights.pth",
-    "plot_save_path": "./saved/plot.png"
+    "data_prep": {
+        "data": {
+            "preprocessed_folder": "ucf-preprocessed-data-10",
+            "batch_size": 10,
+            "folder_limit": 101
+        }
+    },
+    "main": {
+        "paths": {
+            "preprocessed_folder": "ucf-preprocessed-data-500",
+            "dataset_train": "dataset_train.pth",
+            "model_save": "./saved/model_weights.pth",
+            "plot_save": "./saved/plot.png"
+        },
+        "training": {
+            "epochs": 5,
+            "chunk_size": 1,
+            "batch_size": 32,
+            "num_workers": 1
+        }
+    }
 }

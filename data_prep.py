@@ -1,5 +1,8 @@
 #DATA_PREP_PY
+
+##################################################
 # 1. IMPORTS
+##################################################
 from azure.storage.blob import BlobServiceClient, ContainerClient, BlobPrefix
 import torch
 import numpy as np
@@ -14,17 +17,32 @@ from torch.utils.data import Dataset
 import io
 import gc
 import traceback
+import json
+from dotenv import load_dotenv
+import os
 
+##################################################
 # 2. CONSTANTS
-STORAGEACCOUNTURL = "https://exjobbssl1863219591.blob.core.windows.net"
-STORAGEACCOUNTKEY = "PuL1QY8bQvIyGi653lr/9CPvyHLnip+cvsu62YAipDjB7onPDxfME156z5/O2NwY0PRLMTZc86/6+ASt5Vts8w=="
-CONTAINERNAME = "exjobbssl"
-FOLDERNAME = "UCF-101/HighJump/"
-PREPROCESSEDDATA_FOLDERNAME = "ucf-preprocessed-data-500"
-BATCH_SIZE = 500
-DEFAULT_FOLDER_LIMIT = 101
+##################################################
+# Load .env file
+load_dotenv()
 
+# Get Azure credentials from environment
+AZURE_STORAGE_URL = os.getenv('AZURE_STORAGE_URL')
+AZURE_STORAGE_KEY = os.getenv('AZURE_STORAGE_KEY')
+AZURE_CONTAINER_NAME = os.getenv('AZURE_CONTAINER_NAME')
+
+# Load configuration specific to data_prep.py
+with open('config.json', 'r') as f:
+    config = json.load(f)['data_prep']
+
+PREPROCESSEDDATA_FOLDERNAME = config['data']['preprocessed_folder']
+BATCH_SIZE = config['data']['batch_size']
+DEFAULT_FOLDER_LIMIT = config['data']['folder_limit']
+
+##################################################
 # 3. CLASSES
+##################################################
 class BlobSamples(object):
     def __init__(self, single_folder_mode=False, specific_folder_name=""):
         self.depth = 0
@@ -417,7 +435,9 @@ class PreprocessedTemporalFourData(Dataset):
 
         return frame
 
+##################################################
 # 4. HELPER FUNCTIONS
+##################################################
 def get_memory_usage():
     import psutil
     process = psutil.Process()
@@ -519,9 +539,6 @@ def process_batch_fully_extracted(batch, batch_count, blob_service_client_instan
     and then saves the final 4-frame items (8-tuple) into a flat list.
     """
     try:
-        print(f"\n[FullyExtracted] Starting batch {batch_count} processing...")
-        print(f"[FullyExtracted] Batch size: {len(batch)} videos")
-
         # 1) Create the "video dataset" just like before
         video_dataset = PreparedDataset(batch, trainval='train')  
         #   This splits videos into train/test, but if you only want to store “trainval=’train’” data
@@ -533,10 +550,8 @@ def process_batch_fully_extracted(batch, batch_count, blob_service_client_instan
         )
 
         # 3) Now we will call __getitem__ on each index to get the final 8-tuple
-        print("[FullyExtracted] Extracting final 4-frame samples from the entire dataset...")
         final_samples = []
         dataset_length = len(temporal_four_dataset)
-        print(f"[FullyExtracted] dataset_length = {dataset_length}")
 
         for idx in range(dataset_length):
             try:
@@ -559,7 +574,7 @@ def process_batch_fully_extracted(batch, batch_count, blob_service_client_instan
                 traceback.print_exc()
                 continue
 
-        print(f"[FullyExtracted] Collected {len(final_samples)} final samples.")
+        #print(f"[FullyExtracted] Collected {len(final_samples)} final samples.")
 
         # 4) Save final_samples to memory buffer
         buffer = io.BytesIO()
@@ -568,7 +583,7 @@ def process_batch_fully_extracted(batch, batch_count, blob_service_client_instan
 
         # 5) Upload buffer to Azure
         blob_client = blob_service_client_instance.get_blob_client(
-            container=CONTAINERNAME,
+            container=AZURE_CONTAINER_NAME,
             blob=f"{PREPROCESSEDDATA_FOLDERNAME}/ucf101_preprocessed_fullyextracted_batch_{batch_count}.pth"
         )
         blob_client.upload_blob(buffer, overwrite=True)
@@ -581,7 +596,6 @@ def process_batch_fully_extracted(batch, batch_count, blob_service_client_instan
         gc.collect()
         torch.cuda.empty_cache()
 
-        print(f"[FullyExtracted] Completed batch {batch_count}")
         return True
 
     except Exception as e:
@@ -589,7 +603,9 @@ def process_batch_fully_extracted(batch, batch_count, blob_service_client_instan
         traceback.print_exc()
         return False
 
+##################################################
 # 5. MAIN EXECUTION
+##################################################
 if __name__ == "__main__":
     try:
         print("Starting data preprocessing pipeline...")
@@ -598,21 +614,21 @@ if __name__ == "__main__":
         # Initialize blob service
         print("Initializing Azure Blob Storage connection...")
         blob_service_client_instance = BlobServiceClient(
-            account_url=STORAGEACCOUNTURL, credential=STORAGEACCOUNTKEY)
-        container_client_instance = blob_service_client_instance.get_container_client(CONTAINERNAME)
+            account_url=AZURE_STORAGE_URL, credential=AZURE_STORAGE_KEY)
+        container_client_instance = blob_service_client_instance.get_container_client(AZURE_CONTAINER_NAME)
         
         # Option 2: For multiple folders (default)
         sample = BlobSamples(single_folder_mode=False, specific_folder_name="")
         
         video_generator = sample.load_videos_generator(
             blob_service_client_instance,
-            CONTAINERNAME,
+            AZURE_CONTAINER_NAME,
             videos_loaded=None,
             folder_limit=DEFAULT_FOLDER_LIMIT
         )
 
         # Process videos in batches
-        print("\nStarting batch processing...")
+        print("\nStarting blob storage batch processing...")
         batch = []
         batch_count = 0
         video_count = 0
@@ -631,7 +647,9 @@ if __name__ == "__main__":
                         # Store failed videos for retry
                         failed_videos.extend(batch)
                     batch = []
-                    log_memory(f"After processing batch {batch_count}")
+                    print()
+                    log_memory(f"After processing batch {batch_count}:")
+                    print()
                     
             except Exception as e:
                 print(f"\nError processing video {video_count}: {str(e)}")
