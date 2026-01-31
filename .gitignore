@@ -5,3 +5,4 @@ __pycache__/prepared_dataset_class.cpython-310.pyc
 __pycache__/preprocessed_temporal_four_data_class.cpython-310.pyc
 mAP_plot.png
 .env
+local_cache/

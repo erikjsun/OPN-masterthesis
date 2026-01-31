@@ -59,30 +59,73 @@ class FullyExtractedBlobDataset(Dataset):
     """
     Loads multiple fully-extracted .pth files (the 8-tuple samples) from Azure Blob Storage
     into memory as a single list. Each chunk is passed a list of .pth blob names.
+    Implements smart caching: caches files up to MAX_CACHE_SIZE_GB limit.
     """
-    def __init__(self, blob_service_client, container_name, pth_blob_names):
+    MAX_CACHE_SIZE_GB = 18  # Leave some buffer from 20GB available
+
+    def __init__(self, blob_service_client, container_name, pth_blob_names, cache_dir="local_cache"):
         self.blob_service_client = blob_service_client
         self.container_name = container_name
         self.pth_blob_names = pth_blob_names
+        self.cache_dir = cache_dir
         self.samples = []  # store all 8-tuple samples from these pth files
+
+        # Create cache directory if it doesn't exist
+        os.makedirs(self.cache_dir, exist_ok=True)
+
         self._load_pth_files()
+
+    def _get_cache_size_gb(self):
+        """Get current cache size in GB"""
+        total_size = 0
+        if os.path.exists(self.cache_dir):
+            for dirpath, dirnames, filenames in os.walk(self.cache_dir):
+                for filename in filenames:
+                    filepath = os.path.join(dirpath, filename)
+                    if os.path.exists(filepath):
+                        total_size += os.path.getsize(filepath)
+        return total_size / (1024**3)  # Convert to GB
 
     def _load_pth_files(self):
         # Download each .pth blob, load the final list of 8-tuples, and extend self.samples
         for i, blob_name in enumerate(self.pth_blob_names, start=1):
-            print(f"    => Downloading file {i}/{len(self.pth_blob_names)}: {blob_name}")
-            dl_start = time.time()
+            # Create a safe filename from blob name
+            cache_filename = blob_name.replace('/', '_')
+            cache_path = os.path.join(self.cache_dir, cache_filename)
 
-            blob_client = self.blob_service_client.get_blob_client(
-                container=self.container_name, blob=blob_name
-            )
-            downloaded_blob = blob_client.download_blob().readall()
-            dl_end = time.time()
-            print(f"       Download took {dl_end - dl_start:.2f} seconds. Size: {len(downloaded_blob)} bytes.")
+            # Check if file exists in cache
+            if os.path.exists(cache_path):
+                print(f"    => Loading from cache {i}/{len(self.pth_blob_names)}: {blob_name}")
+                load_start = time.time()
+                data_in_this_file = torch.load(cache_path, weights_only=False)
+                load_end = time.time()
+                print(f"       Cache load took {load_end - load_start:.2f} seconds.")
+            else:
+                print(f"    => Downloading file {i}/{len(self.pth_blob_names)}: {blob_name}")
+                dl_start = time.time()
 
-            buffer = io.BytesIO(downloaded_blob)
-            # This should be a list of final samples (8-tuples)
-            data_in_this_file = torch.load(buffer)
+                blob_client = self.blob_service_client.get_blob_client(
+                    container=self.container_name, blob=blob_name
+                )
+                downloaded_blob = blob_client.download_blob().readall()
+                dl_end = time.time()
+                print(f"       Download took {dl_end - dl_start:.2f} seconds. Size: {len(downloaded_blob)} bytes.")
+
+                buffer = io.BytesIO(downloaded_blob)
+                # This should be a list of final samples (8-tuples)
+                data_in_this_file = torch.load(buffer, weights_only=False)
+
+                # Try to save to cache if we have space
+                current_cache_size = self._get_cache_size_gb()
+                file_size_gb = len(downloaded_blob) / (1024**3)
+
+                if current_cache_size + file_size_gb <= self.MAX_CACHE_SIZE_GB:
+                    print(f"       Saving to cache ({current_cache_size:.1f}GB/{self.MAX_CACHE_SIZE_GB}GB used)")
+                    with open(cache_path, 'wb') as f:
+                        f.write(downloaded_blob)
+                else:
+                    print(f"       Cache full ({current_cache_size:.1f}GB/{self.MAX_CACHE_SIZE_GB}GB), skipping cache for this file")
+
             self.samples.extend(data_in_this_file)
 
     def __len__(self):
@@ -210,7 +253,7 @@ def train_model(model_save_path,
                 blob_service_client, 
                 train_blob_names, 
                 val_blob_names, 
-                epochs=5, 
+                epochs=30, 
                 chunk_size=2, 
                 batch_size=32):
 
